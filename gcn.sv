@@ -46,6 +46,8 @@ module GCN
   assign read_address = read_address_comb;
   assign max_addi_answer = max_addi_answer_comb;
 
+  // int i;
+
 
 Scratch_Pad Scratch_Pad_inst
 #(
@@ -96,12 +98,28 @@ Matrix_FM_WM_Memory Matrix_FM_WM_Memory_inst
     if(!reset) begin
       coo_address_comb <= '0;
       read_address_comb <= '0;
+      done <= '0;
+      enable_read <= '0;
 
       for(int k = 0; k<FEATURE_ROWS; k++) begin
         max_addi_answer_comb[k] <= '0;
       end
     end
+  else if(start) begin
+    enable_read <= 1'b1;
+    max_addi_answer_comb <= '0;
+
+
+    for(int i = (WEIGHT_ROWS - 1); i>=0; i--) begin
+      max_addi_answer_comb <= max_addi_answer_comb + (weight_col_out_scratchpad[i] * read_row_matrix[i]);
+
+      if(i == 0) begin
+        
+      end
+    end
+
     
+  end
     
 
   end
