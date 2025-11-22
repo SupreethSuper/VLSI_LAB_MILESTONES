@@ -49,11 +49,12 @@ module GCN
   // int i;
 
 
-Scratch_Pad Scratch_Pad_inst
+Scratch_Pad 
 #(
   .WEIGHT_ROWS(WEIGHT_ROWS),
   .WEIGHT_WIDTH(WEIGHT_WIDTH)
 )
+Scratch_Pad_inst
 (
   //control signals
   .clk(clk), .reset(reset), .write_enable(start),
@@ -65,7 +66,7 @@ Scratch_Pad Scratch_Pad_inst
   .weight_col_out(weight_col_out_scratchpad) //we have to create a logic, that feeds to matric_fm_wm..
 );
 
-Matrix_FM_WM_Memory Matrix_FM_WM_Memory_inst
+Matrix_FM_WM_Memory 
 #(
   .FEATURE_ROWS(FEATURE_ROWS),
   .WEIGHT_COLS(WEIGHT_COLS),
@@ -75,9 +76,10 @@ Matrix_FM_WM_Memory Matrix_FM_WM_Memory_inst
   .FEATURE_WIDTH(FEATURE_WIDTH)
 )
 
+Matrix_FM_WM_Memory_inst
 (
   //control signals
-  .clk(clk), .rst(reset), wr_en(start),
+  .clk(clk), .rst(reset), .wr_en(start),
 
   //input data
   .write_row(write_row_matix),
@@ -107,12 +109,17 @@ Matrix_FM_WM_Memory Matrix_FM_WM_Memory_inst
     end
   else if(start) begin
     enable_read <= 1'b1;
-    max_addi_answer_comb <= '0;
+    // max_addi_answer_comb <= '0;
+    for (int k = 0; k < FEATURE_ROWS; k++)
+      max_addi_answer_comb[k] <= '0;
+
 
 
     for(int i = (WEIGHT_ROWS - 1); i>=0; i--) begin
-      max_addi_answer_comb <= max_addi_answer_comb + (weight_col_out_scratchpad[i] * read_row_matrix[i]);
-
+      //max_addi_answer_comb <= max_addi_answer_comb + (weight_col_out_scratchpad[i] * read_row_matrix[i]);
+      max_addi_answer_comb[i] <= max_addi_answer_comb[i] 
+                           +                 (weight_col_out_scratchpad[i] 
+                           *                  fm_wm_row_out_matrix[i]);
       if(i == 0) begin
         
       end
