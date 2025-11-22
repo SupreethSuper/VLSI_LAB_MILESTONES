@@ -10,127 +10,132 @@ module GCN
     parameter COUNTER_WEIGHT_WIDTH = $clog2(WEIGHT_COLS),
     parameter COUNTER_FEATURE_WIDTH = $clog2(FEATURE_ROWS),
     parameter MAX_ADDRESS_WIDTH = 2,
-    parameter NUM_OF_NODES = 6,			 
-    parameter COO_NUM_OF_COLS = 6,			
-    parameter COO_NUM_OF_ROWS = 2,			
-    parameter COO_BW = $clog2(COO_NUM_OF_COLS)	
+    parameter NUM_OF_NODES = 6,      
+    parameter COO_NUM_OF_COLS = 6,       
+    parameter COO_NUM_OF_ROWS = 2,       
+    parameter COO_BW = $clog2(COO_NUM_OF_COLS)   
 )
 (
-  input logic clk,	// Clock
-  input logic reset,	// Reset 
+  input logic clk,
+  input logic reset,
   input logic start,
-  input logic [WEIGHT_WIDTH-1:0] data_in [0:WEIGHT_ROWS-1], //FM and WM Data
-  input logic [COO_BW - 1:0] coo_in [0:1], //row 0 and row 1 of the COO Stream
+  input logic [WEIGHT_WIDTH-1:0] data_in [0:WEIGHT_ROWS-1],    // Feature matrix or weight matrix data
+  input logic [COO_BW - 1:0] coo_in [0:1],                     // COO edges: row[0]=src, row[1]=dst
 
-  output logic [COO_BW - 1:0] coo_address, // The column of the COO Matrix 
-  output logic [ADDRESS_WIDTH-1:0] read_address, // The Address to read the FM and WM Data
-  output logic enable_read, // Enabling the Read of the FM and WM Data
-  output logic done, // Done signal indicating that all the calculations have been completed
-  output logic [MAX_ADDRESS_WIDTH - 1:0] max_addi_answer [0:FEATURE_ROWS - 1] // The answer to the argmax and matrix multiplication 
-); 
-
-  logic [WEIGHT_WIDTH-1:0] weight_col_out_scratchpad [0:WEIGHT_ROWS-1];
-  //logic [WEIGHT_WIDTH - 1 : 0] wight_col_read;
-  logic [FEATURE_WIDTH - 1 : 0] write_row_matix;
-  logic [FEATURE_WIDTH - 1 : 0] read_row_matrix;
-  logic [WEIGHT_WIDTH-1:0] write_col_matrix;
-  logic [DOT_PROD_WIDTH - 1:0] fm_wm_in_matrix;
-  logic [DOT_PROD_WIDTH - 1:0] fm_wm_row_out_matrix  [0:WEIGHT_COLS-1];
-  // logic counter_fw;
-  // logic weight_width;
-  logic [COO_BW - 1 : 0] coo_address_comb;
-  logic [ADDRESS_WIDTH - 1 : 0] read_address_comb;
-  logic [MAX_ADDRESS_WIDTH - 1 : 0] max_addi_answer_comb [0 : FEATURE_ROWS - 1];
-
-  assign coo_address = coo_address_comb;
-  assign read_address = read_address_comb;
-  assign max_addi_answer = max_addi_answer_comb;
-
-  // int i;
-
-
-Scratch_Pad 
-#(
-  .WEIGHT_ROWS(WEIGHT_ROWS),
-  .WEIGHT_WIDTH(WEIGHT_WIDTH)
-)
-Scratch_Pad_inst
-(
-  //control signals
-  .clk(clk), .reset(reset), .write_enable(start),
-
-  //input data
-  .weight_col_in(data_in), 
-
-  //output data
-  .weight_col_out(weight_col_out_scratchpad) //we have to create a logic, that feeds to matric_fm_wm..
+  output logic [COO_BW - 1:0] coo_address,                     // The column of the COO Matrix 
+  output logic [ADDRESS_WIDTH-1:0] read_address,               // Address for feature/weight data
+  output logic enable_read,                                    // Read enable signal
+  output logic done,                                           // Asserted when all steps finish
+  output logic [MAX_ADDRESS_WIDTH-1:0] max_addi_answer [0:FEATURE_ROWS-1] // Argmax result
 );
 
-Matrix_FM_WM_Memory 
-#(
-  .FEATURE_ROWS(FEATURE_ROWS),
-  .WEIGHT_COLS(WEIGHT_COLS),
-  .DOT_PROD_WIDTH(DOT_PROD_WIDTH),
-  .ADDRESS_WIDTH(ADDRESS_WIDTH),
-  .WEIGHT_WIDTH(WEIGHT_WIDTH),
-  .FEATURE_WIDTH(FEATURE_WIDTH)
-)
+  // Memory registers
+  logic [FEATURE_WIDTH-1:0] feature_matrix [0:FEATURE_ROWS-1][0:FEATURE_COLS-1];
+  logic [WEIGHT_WIDTH-1:0] weight_matrix [0:WEIGHT_ROWS-1];
+  logic [DOT_PROD_WIDTH-1:0] fm_wm_matrix [0:FEATURE_ROWS-1][0:WEIGHT_COLS-1]; // Intermediate matrix
+  logic [DOT_PROD_WIDTH-1:0] comb_matrix [0:FEATURE_ROWS-1][0:WEIGHT_COLS-1];  // After adjacency sum
 
-Matrix_FM_WM_Memory_inst
-(
-  //control signals
-  .clk(clk), .rst(reset), .wr_en(start),
+  // Control registers/states
+  typedef enum logic [2:0] {IDLE, LOAD_FEAT, LOAD_WT, MULT_FM_WM, COMB_ADJ, ARGMAX, ALL_DONE} state_t;
+  state_t state, next_state;
+  integer i, j, k;
 
-  //input data
-  .write_row(write_row_matix),
-  .write_col(write_col_matrix),
-  .read_row(read_row_matrix),
-  .fm_wm_in(fm_wm_in_matrix),
-  .fm_wm_row_out(fm_wm_row_out_matrix)
-);
+  // COO edge iterators
+  integer coo_idx;
 
-//might delete this later
+  // Temp maximums/argmax for each node
+  logic [DOT_PROD_WIDTH-1:0] maxval [0:FEATURE_ROWS-1];
+  logic [MAX_ADDRESS_WIDTH-1:0] maxidx [0:FEATURE_ROWS-1];
 
-// always_comb begin : params_to_logic_assignments
-//   counter_fw = COUNTER_FEATURE_WIDTH;
-//   weight_Width = WEIGHT_WIDTH;
-// end
+  // Output wires
+  assign coo_address     = (state == COMB_ADJ) ? coo_idx : '0;
+  assign read_address    = '0; // no bursting in this demo design, tie low or expand for burst read
+  assign enable_read     = (state == LOAD_FEAT || state == LOAD_WT);
+  assign max_addi_answer = maxidx;
 
-  always_ff @(posedge clk or negedge reset) begin : matrix_and_weights_multiplication
-    if(!reset) begin
-      coo_address_comb <= '0;
-      read_address_comb <= '0;
-      done <= '0;
-      enable_read <= '0;
-
-      for(int k = 0; k<FEATURE_ROWS; k++) begin
-        max_addi_answer_comb[k] <= '0;
+  // Main FSM
+  always_ff @(posedge clk or posedge reset) begin
+    if (reset) begin
+      state <= IDLE;
+      done  <= 1'b0;
+      for (i = 0; i < FEATURE_ROWS; i = i + 1) begin
+        for (j = 0; j < WEIGHT_COLS; j = j + 1) begin
+          fm_wm_matrix[i][j] <= '0;
+          comb_matrix[i][j]  <= '0;
+        end
+        maxval[i] <= '0;
+        maxidx[i] <= '0;
       end
+      coo_idx <= 0;
+    end else begin
+      state <= next_state;
+      // State actions:
+      case (state)
+        IDLE: begin
+          done <= 0;
+        end
+        LOAD_FEAT: begin
+          // Load feature matrix directly from data_in (use only up to FEATURE_COLS/FEATURE_ROWS slots)
+          for (i = 0; i < FEATURE_ROWS; i = i + 1)
+            for (j = 0; j < FEATURE_COLS; j = j + 1)
+              feature_matrix[i][j] <= data_in[j];
+        end
+        LOAD_WT: begin
+          for (i = 0; i < WEIGHT_ROWS; i = i + 1)
+            weight_matrix[i] <= data_in[i];
+        end
+        MULT_FM_WM: begin
+          for (i = 0; i < FEATURE_ROWS; i = i + 1) begin
+            for (j = 0; j < WEIGHT_COLS; j = j + 1) begin
+              fm_wm_matrix[i][j] <= '0;
+              for (k = 0; k < FEATURE_COLS; k = k + 1) begin
+                fm_wm_matrix[i][j] <= fm_wm_matrix[i][j] +
+                  feature_matrix[i][k] * weight_matrix[k*WEIGHT_COLS+j]; // mapping flat weight matrix
+              end
+            end
+          end
+        end
+        COMB_ADJ: begin
+          // For each edge, accumulate the source row into the destination row
+          for (coo_idx = 0; coo_idx < COO_NUM_OF_COLS; coo_idx = coo_idx + 1) begin
+            logic [COO_BW-1:0] src, dst;
+            src = coo_in[0];
+            dst = coo_in[1];
+            for (j = 0; j < WEIGHT_COLS; j = j + 1)
+              comb_matrix[dst][j] <= comb_matrix[dst][j] + fm_wm_matrix[src][j];
+          end
+        end
+        ARGMAX: begin
+          for (i = 0; i < FEATURE_ROWS; i = i + 1) begin
+            maxval[i] = comb_matrix[i][0];
+            maxidx[i] = 0;
+            for (j = 1; j < WEIGHT_COLS; j = j + 1) begin
+              if (comb_matrix[i][j] > maxval[i]) begin
+                maxval[i] = comb_matrix[i][j];
+                maxidx[i] = j[MAX_ADDRESS_WIDTH-1:0];
+              end
+            end
+          end
+        end
+        ALL_DONE: begin
+          done <= 1'b1;
+        end
+      endcase
     end
-  else if(start) begin
-    enable_read <= 1'b1;
-    // max_addi_answer_comb <= '0;
-    for (int k = 0; k < FEATURE_ROWS; k++)
-      max_addi_answer_comb[k] <= '0;
-
-
-
-    for(int i = (WEIGHT_ROWS - 1); i>=0; i--) begin
-      //max_addi_answer_comb <= max_addi_answer_comb + (weight_col_out_scratchpad[i] * read_row_matrix[i]);
-      max_addi_answer_comb[i] <= max_addi_answer_comb[i] 
-                           +                 (weight_col_out_scratchpad[i] 
-                           *                  fm_wm_row_out_matrix[i]);
-      if(i == 0) begin
-        
-      end
-    end
-
-    
-  end
-    
-
   end
 
-
+  // Next state logic
+  always_comb begin
+    next_state = state;
+    case (state)
+      IDLE:      if (start) next_state = LOAD_FEAT;
+      LOAD_FEAT: next_state = LOAD_WT;
+      LOAD_WT:   next_state = MULT_FM_WM;
+      MULT_FM_WM:next_state = COMB_ADJ;
+      COMB_ADJ:  next_state = ARGMAX;
+      ARGMAX:    next_state = ALL_DONE;
+      ALL_DONE:  next_state = ALL_DONE;
+    endcase
+  end
 
 endmodule
