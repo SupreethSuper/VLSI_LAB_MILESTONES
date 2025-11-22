@@ -18,16 +18,21 @@ logic [FEATURE_WIDTH - 1 : 0] mac_unit [0 : FEATURE_ROWS - 1];
 // FIXED: separate output bus
 logic [WEIGHT_WIDTH - 1 : 0] scratchpad_out [0 : WEIGHT_ROWS - 1];
 
-scratchpad sc (
-    .data_in (scratchpad_in),
+logic counter
+
+scratchpad #(
+    .WEIGHT_WIDTH(WEIGHT_WIDTH),
+    .WEIGHT_ROWS(WEIGHT_ROWS),   // <- important
+    .WEIGHT_COLS(WEIGHT_COLS)
+) sc (
+    .data_in(scratchpad_in),
     .data_out(scratchpad_out)
 );
 
+
 always_comb begin
-    for (int i = 0; i < FEATURE_ROWS; i++) begin
-        mac_unit[i] = features_in[i];
-        vector_mul_out[i] = mac_unit[i];
-    end
+
+
 end
 
 endmodule
