@@ -35,9 +35,9 @@ module GCN
   logic [FEATURE_WIDTH - 1 : 0] read_row_matrix;
   logic [WEIGHT_WIDTH-1:0] write_col_matrix;
   logic [DOT_PROD_WIDTH - 1:0] fm_wm_in_matrix;
-  logic [DOT_PROD_WIDTH - 1:0] fm_wm_row_out_matrix  [0:WEIGHT_COLS-1]
-  logic counter_fw;
-  logic weight_width;
+  logic [DOT_PROD_WIDTH - 1:0] fm_wm_row_out_matrix  [0:WEIGHT_COLS-1];
+  // logic counter_fw;
+  // logic weight_width;
   logic [COO_BW - 1 : 0] coo_address_comb;
   logic [ADDRESS_WIDTH - 1 : 0] read_address_comb;
   logic [MAX_ADDRESS_WIDTH - 1 : 0] max_addi_answer_comb [0 : FEATURE_ROWS - 1];
@@ -47,7 +47,7 @@ module GCN
   assign max_addi_answer = max_addi_answer_comb;
 
 
-Scratch_Pad Scratch_Pad
+Scratch_Pad Scratch_Pad_inst
 #(
   .WEIGHT_ROWS(WEIGHT_ROWS),
   .WEIGHT_WIDTH(WEIGHT_WIDTH)
@@ -63,7 +63,7 @@ Scratch_Pad Scratch_Pad
   .weight_col_out(weight_col_out_scratchpad) //we have to create a logic, that feeds to matric_fm_wm..
 );
 
-Matrix_FM_WM_Memory Matrix_FM_WM_Memory
+Matrix_FM_WM_Memory Matrix_FM_WM_Memory_inst
 #(
   .FEATURE_ROWS(FEATURE_ROWS),
   .WEIGHT_COLS(WEIGHT_COLS),
@@ -93,17 +93,15 @@ Matrix_FM_WM_Memory Matrix_FM_WM_Memory
 // end
 
   always_ff @(posedge clk or negedge reset) begin : matrix_and_weights_multiplication
-    if(reset) begin
-      for(int i = 0; i < COO_BW; i++) begin
-        coo_address_comb[i] <= '0;
-      end
-      for(int j = 0; j< ADDRESS_WIDTH; j++) begin
-        read_address_comb[j] <= '0;
-      end
+    if(!reset) begin
+      coo_address_comb <= '0;
+      read_address_comb <= '0;
+
       for(int k = 0; k<FEATURE_ROWS; k++) begin
         max_addi_answer_comb[k] <= '0;
       end
     end
+    
     
 
   end
