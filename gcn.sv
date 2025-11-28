@@ -45,6 +45,8 @@ module GCN
 
   // Temp maximums/argmax for each node
   logic [DOT_PROD_WIDTH-1:0] maxval [0:FEATURE_ROWS-1];
+
+  //no issue with line 50
   logic [MAX_ADDRESS_WIDTH-1:0] maxidx [0:FEATURE_ROWS-1];
 
   // Output wires
@@ -112,7 +114,9 @@ module GCN
             for (j = 1; j < WEIGHT_COLS; j = j + 1) begin
               if (comb_matrix[i][j] > maxval[i]) begin
                 maxval[i] = comb_matrix[i][j];
-                maxidx[i] = j[MAX_ADDRESS_WIDTH-1:0];
+
+                //change in line 119
+                maxidx[j] = j[MAX_ADDRESS_WIDTH-1:0];
               end
             end
           end
