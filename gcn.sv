@@ -35,8 +35,8 @@ module GCN
   output logic [MAX_ADDRESS_WIDTH-1:0] max_addi_answer [0:FEATURE_ROWS-1]
 );
 
-  logic [WEIGHT_WIDTH-1:0] weight_col_out_to_FSM_block [0:WEIGHT_ROWS-1] 
-
+  logic [WEIGHT_WIDTH-1:0] weight_col_out_to_feeder [0:WEIGHT_ROWS-1] 
+  logic [DOT_PROD_WIDTH - 1 : 0] feeder_output_to_fm_wm; 
  Scratch_Pad #(
   .WEIGHT_ROWS(WEIGHT_ROWS),
   .WEIGHT_WIDTH(WEIGHT_WIDTH)
@@ -46,9 +46,22 @@ module GCN
     .clk(clk),
     .reset(reset),
     .write_enable(start),
-    .weight_col_in(coo_in),
-    .weight_col_out(weight_col_out_to_FSM_block)
+    .weight_col_in(data_in),
+    .weight_col_out(weight_col_out_to_feeder)
  );
+
+  FM_WM_feeder fm_wm_multiply_ops (
+    .coo_in_a(weight_col_out_to_feeder),
+    .data_in_b(data_in),
+    .feeder_output(feeder_output_to_fm_wm)
+  );
+
+  
+
+
+
+
+
 
 
 
