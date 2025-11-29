@@ -8,7 +8,7 @@ module Scratch_Pad
   input logic clk,
   input logic reset,
   input logic write_enable,
-  input wire [WEIGHT_WIDTH-1:0] weight_col_in [0:WEIGHT_ROWS-1],
+  input logic [WEIGHT_WIDTH-1:0] weight_col_in [0:WEIGHT_ROWS-1],
   output logic [WEIGHT_WIDTH-1:0] weight_col_out [0:WEIGHT_ROWS-1]
 );
 
