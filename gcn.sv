@@ -72,13 +72,9 @@ module GCN
 
 
 
-  Matrix_FM_WM_Memory coo_matrix (
-    .clk(clk), .rst(reset), .write_row(write_to_row_num),
-    .write_col(write_to_col_num), . wr_en(enable_write_fm_wm_prod_auth),
-    .fm_wm_in(feeder_output_to_fm_wm),
-    //pending pins -> read row, fm_wm_row_out
 
-  );
+
+
 
 
 
